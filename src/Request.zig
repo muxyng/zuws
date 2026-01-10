@@ -40,10 +40,10 @@ pub fn getHeader(self: *const Request, lower_case_header: []const u8) ?[]const u
     return if (temp == null) null else temp[0..len];
 }
 
-pub fn getQueryParam(self: *const Request, name: []const u8) []const u8 {
+pub fn getQueryParam(self: *const Request, name: []const u8) ?[]const u8 {
     var temp: [*c]const u8 = undefined;
     const len = c.uws_req_get_query(self.ptr, name.ptr, name.len, &temp);
-    return temp[0..len];
+    return if (temp == null) null else temp[0..len];
 }
 
 pub fn getParameter(self: *const Request, index: u16) []const u8 {
