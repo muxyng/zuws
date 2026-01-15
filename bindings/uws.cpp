@@ -195,12 +195,14 @@ void uws_req_set_yield(uws_req_t *res, bool yield)
     return ((uWS::HttpRequest *)res)->setYield(yield);
 }
 
-void uws_req_for_each_header(uws_req_t *res, uws_get_headers_server_handler handler)
+uint8_t uws_req_for_each_header(uws_req_t *res, void *ctx, uws_get_headers_server_handler handler)
 {
     for (auto header : *((uWS::HttpRequest *)res))
     {
-        handler(header.first.data(), header.first.length(), header.second.data(), header.second.length());
+        if (handler(ctx, header.first.data(), header.first.length(), header.second.data(), header.second.length()))
+            return 1;
     }
+    return 0;
 }
 
 size_t uws_req_get_url(uws_req_t *res, const char **dest)

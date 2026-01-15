@@ -133,12 +133,12 @@ uws_app_t *uws_create_app();
 #pragma endregion
 #pragma region uWS-Request
 
-    typedef void (*uws_get_headers_server_handler)(const char *header_name, size_t header_name_size, const char *header_value, size_t header_value_size);
+    typedef uint8_t (*uws_get_headers_server_handler)(void *ctx, const char *header_name, size_t header_name_size, const char *header_value, size_t header_value_size);
 
     bool uws_req_is_ancient(uws_req_t *res);
     bool uws_req_get_yield(uws_req_t *res);
     void uws_req_set_yield(uws_req_t *res, bool yield);
-    void uws_req_for_each_header(uws_req_t *res, uws_get_headers_server_handler handler);
+    uint8_t uws_req_for_each_header(uws_req_t *res, void *ctx, uws_get_headers_server_handler handler);
     size_t uws_req_get_url(uws_req_t *res, const char **dest);
     size_t uws_req_get_full_url(uws_req_t *res, const char **dest);
     size_t uws_req_get_method(uws_req_t *res, const char **dest);
