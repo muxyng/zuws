@@ -4,18 +4,13 @@ Opinionated zig bindings for [`uWebSockets`](https://github.com/uNetworking/uWeb
 
 # Installation
 
-Currently zig does not support nested submodules, the recommended way is to add zuws as a submodule.
-
-```sh
-git submodule add git@github.com:harmony-co/zuws.git
-```
-
 In your `build.zig.zon` file add the following:
 
 ```zig
 .dependencies = .{
     .zuws = .{
-        .path = "zuws", // or the path you saved zuws to
+        .url = "git+https://github.com/muxyng/zuws?ref=main#<commit>",
+        .hash = "zuws-...",
     },
 },
 ```
@@ -27,10 +22,7 @@ const zuws = b.dependency("zuws", .{
     .target = target,
     .optimize = optimize,
     .debug_logs = true,
-    .ssl = false,
-    .no_zlib = false,
     .with_proxy = false,
-    .with_uv = false,
 });
 
 exe.root_module.addImport("zuws", zuws.module("zuws"));
@@ -62,11 +54,9 @@ fn hello(res: *Response, _: *Request) void {
 }
 ```
 
-## SSL support via BoringSSL
+## TLS and compression
 
-Enabling ssl in `zuws` is as simple as passing `.ssl = true` to the build options, once enabled `App.init` will now ask for the options which can be found [here](https://github.com/uNetworking/uSockets/blob/182b7e4fe7211f98682772be3df89c71dc4884fa/src/libusockets.h#L127).
-
-You can also check our [example](./examples/hello-world-ssl) for using ssl.
+This fork is intentionally lean and ships an epoll + no-SSL + no-zlib build. TLS termination should happen at a reverse proxy (nginx/caddy) in front of the app.
 
 # Grouping
 
@@ -151,7 +141,7 @@ app.comptimeGroup(v2);
 
 # Running the Examples
 
-To run the provided examples in `zuws` you can clone the repository (don't forget to initialize the submodules), and run the following command:
+To run the provided examples in `zuws`, clone the repository and run the following command:
 
 ```zsh
 zig build example -- <example-name>

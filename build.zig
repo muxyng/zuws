@@ -1,6 +1,4 @@
 const std = @import("std");
-const linkLibUV = @import("./build.libuv.zig").linkLibUV;
-const linkBoringSSL = @import("./build.boringssl.zig").linkBoringSSL;
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -8,15 +6,11 @@ pub fn build(b: *std.Build) !void {
 
     const debug_logs = b.option(bool, "debug_logs", "Whether to enable debug logs for route creation.") orelse (optimize == .Debug);
     const with_proxy = b.option(bool, "with_proxy", "Whether to enable PROXY Protocol v2 support.") orelse false;
-    const with_uv = false;
-    const no_zlib = true;
-    const ssl = false;
 
     const config_options = b.addOptions();
     config_options.addOption(bool, "debug_logs", debug_logs);
-    config_options.addOption(bool, "is_ssl", ssl);
+    config_options.addOption(bool, "is_ssl", false);
 
-    const us = b.dependency("uSockets", .{});
     const uSockets = b.addLibrary(.{
         .name = "uSockets",
         .root_module = b.createModule(.{
@@ -30,92 +24,23 @@ pub fn build(b: *std.Build) !void {
     uSockets.link_data_sections = true;
     uSockets.link_gc_sections = true;
 
-    if (!no_zlib) {
-        const zlib_c = b.dependency("zlib", .{});
-        const zlib = b.addLibrary(.{
-            .name = "z",
-            .linkage = .static,
-            .root_module = b.createModule(.{
-                .target = target,
-                .optimize = optimize,
-                .link_libc = true,
-            }),
-        });
-
-        zlib.link_function_sections = true;
-        zlib.link_data_sections = true;
-        zlib.link_gc_sections = true;
-
-        zlib.root_module.addCSourceFiles(.{
-            .root = zlib_c.path(""),
-            .files = &.{
-                "adler32.c",
-                "crc32.c",
-                "deflate.c",
-                "infback.c",
-                "inffast.c",
-                "inflate.c",
-                "inftrees.c",
-                "trees.c",
-                "zutil.c",
-                "compress.c",
-                "uncompr.c",
-                "gzclose.c",
-                "gzlib.c",
-                "gzread.c",
-                "gzwrite.c",
-            },
-            .flags = &.{
-                "-DHAVE_SYS_TYPES_H",
-                "-DHAVE_STDINT_H",
-                "-DHAVE_STDDEF_H",
-                "-DZ_HAVE_UNISTD_H",
-            },
-        });
-
-        zlib.installHeadersDirectory(zlib_c.path(""), "", .{
-            .include_extensions = &.{
-                "zconf.h",
-                "zlib.h",
-            },
-        });
-
-        uSockets.root_module.linkLibrary(zlib);
-    }
-
-    uSockets.root_module.addIncludePath(us.path(""));
-    uSockets.installHeader(us.path("libusockets.h"), "libusockets.h");
-
-    var uSockets_c_files: std.ArrayList([]const u8) = .empty;
-    try uSockets_c_files.appendSlice(b.allocator, &.{
-        "bsd.c",
-        "context.c",
-        "loop.c",
-        "quic.c",
-        "socket.c",
-        "udp.c",
-        "crypto/sni_tree.cpp",
-        "eventing/epoll_kqueue.c",
-    });
-
-    var us_flags: std.ArrayList([]const u8) = try .initCapacity(b.allocator, 2);
-
-    if (with_uv) {
-        try linkLibUV(b, uSockets);
-        try uSockets_c_files.append(b.allocator, "eventing/libuv.c");
-        try us_flags.append(b.allocator, "-DLIBUS_USE_LIBUV");
-    }
-
-    if (ssl) {
-        try linkBoringSSL(b, uSockets);
-        try uSockets_c_files.append(b.allocator, "crypto/openssl.c");
-        try us_flags.append(b.allocator, "-DLIBUS_USE_OPENSSL");
-    } else try us_flags.append(b.allocator, "-DLIBUS_NO_SSL");
+    const u_sockets_root = b.path("uWebSockets/uSockets/src");
+    uSockets.root_module.addIncludePath(u_sockets_root);
+    uSockets.installHeader(b.path("uWebSockets/uSockets/src/libusockets.h"), "libusockets.h");
 
     uSockets.root_module.addCSourceFiles(.{
-        .root = us.path(""),
-        .files = try uSockets_c_files.toOwnedSlice(b.allocator),
-        .flags = try us_flags.toOwnedSlice(b.allocator),
+        .root = u_sockets_root,
+        .files = &.{
+            "bsd.c",
+            "context.c",
+            "loop.c",
+            "quic.c",
+            "socket.c",
+            "udp.c",
+            "crypto/sni_tree.cpp",
+            "eventing/epoll_kqueue.c",
+        },
+        .flags = &.{"-DLIBUS_NO_SSL"},
     });
 
     const uws = b.addTranslateC(.{
@@ -123,15 +48,11 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
+    uws.defineCMacro("ZUWS_USE_SSL", "0");
 
-    uws.defineCMacro("ZUWS_USE_SSL", if (ssl) "1" else "0");
-
-    var uws_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 4);
-
-    if (ssl) try uws_flags.append(b.allocator, "-DZUWS_USE_SSL");
-    if (no_zlib) try uws_flags.append(b.allocator, "-DUWS_NO_ZLIB");
+    var uws_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 3);
+    try uws_flags.append(b.allocator, "-DUWS_NO_ZLIB");
     if (with_proxy) try uws_flags.append(b.allocator, "-DUWS_WITH_PROXY");
-    //if (target.result.os.tag != .windows) try uws_flags.append("-flto=auto");
 
     const uWebSockets = uws.addModule("uws");
     uWebSockets.link_libcpp = true;
@@ -150,12 +71,12 @@ pub fn build(b: *std.Build) !void {
 
     zuws.addOptions("config", config_options);
     zuws.addImport("uws", uWebSockets);
+
     const libzuws = b.addLibrary(.{
         .name = "zuws",
         .linkage = .static,
         .root_module = zuws,
     });
-
     b.installArtifact(libzuws);
 
     const example_step = b.step("example", "Build and run an example.");
@@ -164,8 +85,8 @@ pub fn build(b: *std.Build) !void {
     const export_test = b.addTest(.{
         .root_module = zuws,
     });
-
     const run_export_test = b.addRunArtifact(export_test);
+
     const test_step = b.step("test", "Run unit tests on the exports");
     test_step.dependOn(&run_export_test.step);
 
@@ -197,9 +118,11 @@ pub fn build(b: *std.Build) !void {
         const asm_description = try std.fmt.allocPrint(b.allocator, "Emit the {s} example ASM file", .{example_name});
         const asm_step_name = try std.fmt.allocPrint(b.allocator, "{s}-asm", .{example_name});
         const asm_step = b.step(asm_step_name, asm_description);
+
         const awf = b.addUpdateSourceFiles();
         awf.step.dependOn(b.getInstallStep());
         awf.addCopyFileToSource(exe.getEmittedAsm(), "main.asm");
+
         asm_step.dependOn(&awf.step);
         example_assembly_step.dependOn(asm_step);
     }
