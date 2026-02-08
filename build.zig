@@ -8,9 +8,9 @@ pub fn build(b: *std.Build) !void {
 
     const debug_logs = b.option(bool, "debug_logs", "Whether to enable debug logs for route creation.") orelse (optimize == .Debug);
     const with_proxy = b.option(bool, "with_proxy", "Whether to enable PROXY Protocol v2 support.") orelse false;
-    const with_uv = b.option(bool, "with_uv", "Whether to compile using LIBUV as the event-loop.") orelse false;
-    const no_zlib = b.option(bool, "no_zlib", "Whether to disable per-message deflate.") orelse false;
-    const ssl = b.option(bool, "ssl", "Whether to enable SSL.") orelse false;
+    const with_uv = false;
+    const no_zlib = true;
+    const ssl = false;
 
     const config_options = b.addOptions();
     config_options.addOption(bool, "debug_logs", debug_logs);
@@ -46,7 +46,7 @@ pub fn build(b: *std.Build) !void {
         zlib.link_data_sections = true;
         zlib.link_gc_sections = true;
 
-        zlib.addCSourceFiles(.{
+        zlib.root_module.addCSourceFiles(.{
             .root = zlib_c.path(""),
             .files = &.{
                 "adler32.c",
@@ -172,7 +172,9 @@ pub fn build(b: *std.Build) !void {
     if (b.args) |args| {
         const example_name = args[0];
         const path = try std.fmt.allocPrint(b.allocator, "examples/{s}/main.zig", .{example_name});
-        try std.fs.cwd().access(path, .{});
+
+        const io = std.Options.debug_io;
+        try std.Io.Dir.cwd().access(io, path, .{});
 
         const exe = b.addExecutable(.{
             .name = example_name,
